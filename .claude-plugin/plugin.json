@@ -15,19 +15,19 @@
     "read-only"
   ],
   "commands": [
-    "commands/inspect.md",
-    "commands/inspect-status.md",
-    "commands/inspect-topic.md",
-    "commands/inspect-approve.md"
+    "./commands/inspect.md",
+    "./commands/inspect-status.md",
+    "./commands/inspect-topic.md",
+    "./commands/inspect-approve.md"
   ],
   "agents": [
-    "agents/project-inspector.md"
+    "./agents/project-inspector.md"
   ],
   "skills": [
-    "skills/project-analysis",
-    "skills/project-docs",
-    "skills/audit-breakdown",
-    "skills/audit-sync"
+    "./skills/project-analysis",
+    "./skills/project-docs",
+    "./skills/audit-breakdown",
+    "./skills/audit-sync"
   ],
   "hardConstraints": {
     "modifiesSourceCode": false,
