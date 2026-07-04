@@ -1,6 +1,6 @@
 {
   "$schemaVersion": 1,
-  "description": "Extensibility seam for the Ono Project Inspector plugin. The orchestrating agent (agents/project-inspector.md) reads this file to decide which skills exist, in what order, how they connect to hooks, and how they relate to each other. Each skill declares a `type`: `workflow` (a normal registry-driven skill the agent sequences) or `internal` (auto-invoked infrastructure the agent calls automatically at checkpoints — not a workflow stage, no command, no approval gate; marked `autoInvoke: true`). For `workflow` skills, `workflowRole` further distinguishes the linear inspection sequence (`inspection`, the default) from on-demand maintenance tools (`maintenance`). `role`/`pairsWith` express intra-stage relationships such as the breakdown-approve loop. Adding a new skill never requires editing the agent when it fits an existing shape — only this file plus the new skill folder (and optionally a new hook and command).",
+  "description": "Extensibility seam for the Ono Project Inspector plugin. The orchestrating agent (agents/project-inspector.md) reads this file to decide which skills exist, in what order, how they connect to hooks, and how they relate to each other. Each skill declares a `type`: `workflow` (a normal registry-driven skill the agent sequences) or `internal` (auto-invoked infrastructure the agent calls automatically at checkpoints — not a workflow stage, no command, no approval gate; marked `autoInvoke: true`). For `workflow` skills, `workflowRole` further distinguishes the linear inspection sequence (`inspection`, the default) from on-demand maintenance tools (`maintenance`). `role`/`pairsWith` express intra-stage relationships such as the breakdown-approve loop. For `workflow`+`inspection` skills, `produces` (the artifacts a stage writes) plus `completion` are the single source of truth for stage completion and resume: `completion: \"artifacts\"` (the default when omitted) means the stage is complete when all of its `produces` exist on disk; `completion: \"topics\"` means completion is derived from the AUDIT.md topic table (no Pending Breakdown and no Draft rows). The deterministic scripts/inspection-state.ts helper reads these fields — it contains no hardcoded stage list. Adding a new linear workflow skill therefore requires only its skills/<id>/SKILL.md folder plus one entry here (with `stage`, `type`, `workflowRole`, `produces`, and optionally `completion`). Adding a skill never requires editing the agent when it fits an existing shape.",
   "skills": [
     {
       "id": "inspection-state",
@@ -25,6 +25,7 @@
       "workflowRole": "inspection",
       "path": "skills/project-analysis",
       "produces": ["CLAUDE.md", "AUDIT.md"],
+      "completion": "artifacts",
       "requires": [],
       "repeatable": false,
       "requiresApproval": true,
@@ -48,6 +49,7 @@
         "docs/project/patterns.md",
         "docs/project/integrations.md"
       ],
+      "completion": "artifacts",
       "requires": ["CLAUDE.md"],
       "repeatable": false,
       "requiresApproval": true,
@@ -66,6 +68,7 @@
       "workflowRole": "inspection",
       "path": "skills/audit-breakdown",
       "produces": ["audits/<topic-slug>/<topic-slug>-audit.md"],
+      "completion": "topics",
       "requires": ["AUDIT.md"],
       "repeatable": true,
       "requiresApproval": true,
@@ -84,6 +87,7 @@
       "workflowRole": "inspection",
       "path": "skills/audit-approve",
       "produces": [],
+      "completion": "topics",
       "requires": ["AUDIT.md"],
       "repeatable": true,
       "requiresApproval": false,

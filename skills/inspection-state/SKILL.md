@@ -53,13 +53,13 @@ Advise the developer to **commit `.ono/state.json`** (like `AUDIT.md`) so inspec
 
 ## The Deterministic Helper
 
-All state logic lives in `scripts/inspection-state.ts` (run with a TypeScript runner, e.g. `bun scripts/inspection-state.ts <command> <repo-root> [args]`). Commands:
+All state logic lives in `scripts/inspection-state.ts` (run with a TypeScript runner, e.g. `bun scripts/inspection-state.ts <command> <repo-root> [args]`). The helper is fully **registry-driven**: it reads `skills/registry.json` for the ordered set of `type: workflow` + `workflowRole: inspection` stages and derives completion from each stage's `produces` and `completion` (`"artifacts"` = all produced paths exist; `"topics"` = every AUDIT.md topic is Approved). It contains no hardcoded stage names, so a new linear workflow skill is tracked automatically once its registry entry exists. Commands:
 
 | Command | Purpose |
 |---------|---------|
 | `detect <repo-root>` | Print JSON: inspected?, stored vs current plugin/schema version, `versionMismatch`, `needsMigration`, completed stages, counts, resume pointer. Always exits 0. |
 | `init <repo-root> [gitRemote]` | Create `state.json` if absent (idempotent). |
-| `sync <repo-root> [gitRemote] [gitHead]` | Reconcile stages (from on-disk artifacts), the topic snapshot, counts, and the resume pointer from `AUDIT.md`, then write. |
+| `sync <repo-root> [gitRemote] [gitHead]` | Reconcile the topic snapshot, counts, per-stage completion, and the resume pointer, then write. Stage identity, order, produced artifacts, and completion are read from `skills/registry.json` — the helper has no hardcoded stage list. |
 | `set-stage <repo-root> <stage> <status>` | Record a non-topic stage's status (`pending`/`in-progress`/`complete`). |
 | `migrate <repo-root>` | Migrate an older `stateSchemaVersion` forward to the current one. |
 
@@ -77,7 +77,7 @@ The agent calls this skill automatically — the developer never asks for it:
 ```jsonc
 {
   "stateSchemaVersion": 1,
-  "plugin": { "name": "ono-project-inspector", "version": "0.5.0" },
+  "plugin": { "name": "ono-project-inspector", "version": "0.6.0" },
   "repository": { "gitRemote": "git@github.com:org/repo.git or null", "gitHead": "sha or null" },
   "createdAt": "ISO-8601",
   "updatedAt": "ISO-8601",

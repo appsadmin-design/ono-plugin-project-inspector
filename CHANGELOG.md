@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-07-04
+
+Made the inspection workflow fully registry-driven. `scripts/inspection-state.ts` previously hardcoded the stage list, order, produced artifacts, and completion/resume logic; it now derives all of that from `skills/registry.json`.
+
+- Added a `completion` field to `workflow`+`inspection` registry entries: `"artifacts"` (complete when all `produces` exist — the default) or `"topics"` (complete when every AUDIT.md topic is Approved). Set `artifacts` for `project-analysis`/`project-docs`, `topics` for `audit-breakdown`/`audit-approve`.
+- Refactored `scripts/inspection-state.ts` to load `registry.json` and compute per-stage completion, `completedStages`, `currentStage`, `stage3Complete`, and the `resume` pointer generically from each stage's `stage`, `produces`, and `completion`. Removed the hardcoded `NON_TOPIC_STAGES` and stage-specific artifact/resume logic. Still fully deterministic — no logic moved to the LLM.
+- Result: adding a new **linear** workflow skill now requires only creating `skills/<id>/SKILL.md` and adding one registry entry (with `produces` + `completion`). The agent executes it (its loop was already generic) and the state helper tracks/resumes it automatically — no edits to the script, agent, or plugin.json. Verified by temporarily adding a stage-5 entry and observing it auto-tracked and resumed.
+- Registry `description` documents the `produces`/`completion` completion contract. Small update to `skills/inspection-state/SKILL.md` and the architecture docs to reflect the registry-driven behavior.
+- The agent and the workflow shape are unchanged; no new commands.
+- No changes to any target repository's source code.
+
 ## 0.5.0 — 2026-07-03
 
 Added `inspection-state`, an internal infrastructure skill that tracks resumable inspection state per repository.

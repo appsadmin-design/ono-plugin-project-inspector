@@ -127,6 +127,7 @@ The registry is the **capability contract**: a data description of every skill, 
 | `role`, `pairsWith` | Intra-stage relationships (e.g. the breakdown↔approve pair). |
 | `workflowRole` | `inspection` (in the linear loop) or `maintenance` (on-demand only). |
 | `requires`, `produces` | Prerequisite artifacts and output artifacts. |
+| `completion` | How a stage's completion is detected: `artifacts` (all `produces` exist on disk — the default) or `topics` (every `AUDIT.md` topic Approved). Read by the state helper; no stage list is hardcoded. |
 | `repeatable`, `requiresApproval` | Loop semantics and gating. |
 | `hooks` | `{ before, after }` checkpoint files. |
 
@@ -241,7 +242,7 @@ Before it, "resume" was reconstructed by guessing from artifacts on disk, and th
 ```jsonc
 {
   "stateSchemaVersion": 1,
-  "plugin": { "name": "ono-project-inspector", "version": "0.5.0" },
+  "plugin": { "name": "ono-project-inspector", "version": "0.6.0" },
   "repository": { "gitRemote": "https://…/repo.git or null", "gitHead": "sha or null" },
   "createdAt": "…", "updatedAt": "…",
   "inspection": { "started": true, "completedStages": ["project-analysis"], "currentStage": "project-docs", "stage3Complete": false },
@@ -261,6 +262,8 @@ Before it, "resume" was reconstructed by guessing from artifacts on disk, and th
 
 ### Why `state.json` is the orchestration source of truth
 The agent needs fast, exact, machine-readable answers to "what's done, what's next, which version" that prose cannot reliably provide. For *orchestration decisions* — resume, completion, version/migration — `state.json` is authoritative. The two never conflict because state is a projection of `AUDIT.md` plus orchestration-only fields (versions, stage completion, timestamps, resume pointer).
+
+**Fully registry-driven.** The state helper (`scripts/inspection-state.ts`) contains no hardcoded stage list. It reads the ordered `type: workflow` + `workflowRole: inspection` entries from `registry.json` and derives per-stage completion, `completedStages`, `currentStage`, and the `resume` pointer from each stage's `stage`, `produces`, and `completion` fields. Adding a new linear stage is therefore a registry entry plus a `skills/<id>/SKILL.md` folder — the agent executes it and the state helper tracks and resumes it with no code change. The derivation is deterministic (plain artifact-existence and topic-count checks); no orchestration logic lives in the LLM.
 
 ```mermaid
 stateDiagram-v2

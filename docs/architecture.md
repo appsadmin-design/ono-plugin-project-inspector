@@ -59,12 +59,14 @@ Skills produce markdown by LLM judgment, which is good for prose but not ideal f
 
 Two design rules keep it safe: **`AUDIT.md` stays the source of truth** — the state file mirrors it and never overrides it — and **the file is portable** — it stores only repo-relative paths and the git remote, never absolute machine paths, so it is committed to Git and travels across clones. `.ono/` is intended as a shared infrastructure directory for future Ono plugins; this plugin owns only `state.json` within it.
 
+The helper is **fully registry-driven**: it has no hardcoded stage list. It reads the ordered `type: workflow` + `workflowRole: inspection` entries from `registry.json` and derives per-stage completion, `completedStages`, `currentStage`, and the `resume` pointer from each stage's `stage`, `produces`, and `completion` field (`artifacts` = all `produces` exist; `topics` = every `AUDIT.md` topic Approved). Adding a new linear stage needs no change here — the new registry entry is tracked and resumed automatically. The derivation stays deterministic; no logic moves to the LLM.
+
 ## Extending the plugin
 
 To add a new skill, e.g. `security-inspector`:
 
-1. Place the skill under `skills/security-inspector/` and list it in `plugin.json`'s `skills[]` array.
-2. Add one entry to `skills/registry.json` with its `type` (`workflow` or `internal`), `stage`, `role`/`pairsWith`/`workflowRole` (for workflow skills), `requires`, `produces`, and `requiresApproval`.
+1. Place the skill under `skills/security-inspector/` (the default `skills/` scan picks it up automatically; listing it in `plugin.json`'s `skills[]` is optional).
+2. Add one entry to `skills/registry.json` with its `type` (`workflow` or `internal`), `stage`, `role`/`pairsWith`/`workflowRole` (for workflow skills), `requires`, `produces`, `completion` (`artifacts` or `topics`), and `requiresApproval`. For a linear workflow stage, `produces` + `completion` are all the state helper needs to track and resume it — no script change.
 3. Optionally add `hooks/after-security-inspector.md` if the stage needs a checkpoint, and a command under `commands/` (also listed in `plugin.json`) if it needs a dedicated entry point.
 
 If the new skill fits an existing orchestration shape — a linear inspection stage, a breakdown-approve-style loop partner, or an on-demand maintenance tool — no change to `agents/project-inspector.md` or existing hooks is needed; the agent's generic logic already handles it via the registry fields. Only a genuinely new orchestration pattern (as the breakdown-approve loop itself was) requires updating the agent.

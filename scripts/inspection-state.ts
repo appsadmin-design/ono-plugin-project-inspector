@@ -78,7 +78,60 @@ interface InspectionState {
   migrations: { history: Array<{ from: number; to: number; at: string }> };
 }
 
-const NON_TOPIC_STAGES = ["project-analysis", "project-docs"];
+type Counts = { pendingBreakdown: number; draft: number; approved: number; total: number };
+
+/** A workflow + inspection stage, as declared in skills/registry.json. */
+interface RegistryStage {
+  id: string;
+  stage: number;
+  produces: string[];
+  completion: "artifacts" | "topics";
+}
+
+/**
+ * Load the ordered linear inspection stages from the registry. This is the
+ * single source of truth for stage identity, order, produced artifacts, and
+ * how completion is detected — no stage names are hardcoded in this file.
+ * Portable: registry.json lives inside the plugin, resolved relative to this
+ * script (works in dev and in the installed plugin cache).
+ */
+function loadInspectionStages(): RegistryStage[] {
+  try {
+    const reg = JSON.parse(readFileSync(join(__dirname, "..", "skills", "registry.json"), "utf-8"));
+    return ((reg.skills ?? []) as any[])
+      .filter((s) => s.enabled !== false && s.type === "workflow" && s.workflowRole === "inspection")
+      .map((s) => ({
+        id: String(s.id),
+        stage: typeof s.stage === "number" ? s.stage : 0,
+        produces: Array.isArray(s.produces) ? s.produces.map(String) : [],
+        completion: s.completion === "topics" ? "topics" : "artifacts",
+      }) as RegistryStage)
+      .sort((a, b) => a.stage - b.stage);
+  } catch {
+    return [];
+  }
+}
+
+/** Deterministic completion test for one stage, driven entirely by its registry declaration. */
+function isStageComplete(stage: RegistryStage, repoRoot: string, counts: Counts): boolean {
+  if (stage.completion === "topics") {
+    // Topic-loop stage: complete when every AUDIT.md topic is Approved.
+    return counts.total > 0 && counts.pendingBreakdown === 0 && counts.draft === 0;
+  }
+  // Artifact stage: complete when all concrete produced paths exist. Templated
+  // paths (containing "<...>") are dynamic and cannot be existence-checked.
+  const concrete = stage.produces.filter((p) => !p.includes("<"));
+  if (concrete.length === 0) return false;
+  return concrete.every((rel) => existsSync(join(repoRoot, rel)));
+}
+
+/** In-progress heuristic: partial artifacts on disk, or a topic loop that has started. */
+function isStageInProgress(stage: RegistryStage, repoRoot: string, counts: Counts): boolean {
+  if (stage.completion === "topics") {
+    return counts.total > 0 && (counts.pendingBreakdown > 0 || counts.draft > 0);
+  }
+  return stage.produces.filter((p) => !p.includes("<")).some((rel) => existsSync(join(repoRoot, rel)));
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -121,6 +174,11 @@ function writeState(repoRoot: string, state: InspectionState): void {
   writeFileSync(statePath(repoRoot), JSON.stringify(state, null, 2) + "\n", "utf-8");
 }
 
+function firstStageHint(prefix: string): string {
+  const first = loadInspectionStages()[0];
+  return first ? `${prefix}Run ${first.id} (stage ${first.stage}) to begin.` : `${prefix}Run the first inspection stage to begin.`;
+}
+
 function freshState(gitRemote: string | null): InspectionState {
   const ts = nowIso();
   return {
@@ -133,7 +191,7 @@ function freshState(gitRemote: string | null): InspectionState {
     stages: {},
     topics: [],
     counts: { pendingBreakdown: 0, draft: 0, approved: 0, total: 0 },
-    resume: { nextAction: "run-stage", topic: null, hint: "Run project-analysis to begin." },
+    resume: { nextAction: "run-stage", topic: null, hint: firstStageHint("") },
     maintenance: { lastSyncAt: null },
     migrations: { history: [] },
   };
@@ -191,8 +249,10 @@ function countTopics(topics: TopicState[]): InspectionState["counts"] {
   };
 }
 
-function computeResume(state: InspectionState): InspectionState["resume"] {
+function computeResume(state: InspectionState, stages: RegistryStage[]): InspectionState["resume"] {
   const c = state.counts;
+
+  // 1. An open Draft awaiting review always takes priority.
   const firstDraft = state.topics.find((t) => t.status === "Draft");
   if (firstDraft) {
     return {
@@ -201,24 +261,28 @@ function computeResume(state: InspectionState): InspectionState["resume"] {
       hint: `Review the ${firstDraft.topic} Draft, then /inspect-approve to finalize and continue.`,
     };
   }
-  if (!state.inspection.completedStages.includes("project-analysis")) {
-    return { nextAction: "run-stage", topic: null, hint: "Run project-analysis to begin." };
+
+  // 2. The current stage is the first (in registry order) not yet complete.
+  const current = stages.find((st) => state.stages[st.id]?.status !== "complete");
+  if (!current) {
+    return { nextAction: "stage3-complete", topic: null, hint: "All inspection stages complete. /inspect-sync is available for optional maintenance." };
   }
-  if (!state.inspection.completedStages.includes("project-docs")) {
-    return { nextAction: "run-stage", topic: null, hint: "Run project-docs (stage 2)." };
+
+  // 3. A topic-loop stage: break down the next pending topic, or nothing actionable.
+  if (current.completion === "topics") {
+    if (c.pendingBreakdown > 0) {
+      const next = state.topics.find((t) => t.status === "Pending Breakdown");
+      return {
+        nextAction: "breakdown-next",
+        topic: next?.topic ?? null,
+        hint: `Break down the next Pending Breakdown topic${next ? ` (${next.topic})` : ""}.`,
+      };
+    }
+    return { nextAction: "idle", topic: null, hint: "No topics pending." };
   }
-  if (c.pendingBreakdown > 0) {
-    const next = state.topics.find((t) => t.status === "Pending Breakdown");
-    return {
-      nextAction: "breakdown-next",
-      topic: next?.topic ?? null,
-      hint: `Break down the next Pending Breakdown topic${next ? ` (${next.topic})` : ""}.`,
-    };
-  }
-  if (c.total > 0 && c.draft === 0 && c.pendingBreakdown === 0) {
-    return { nextAction: "stage3-complete", topic: null, hint: "Stage 3 complete. /inspect-sync is available for optional maintenance." };
-  }
-  return { nextAction: "idle", topic: null, hint: "Nothing pending." };
+
+  // 4. An artifact stage that has not yet produced its outputs.
+  return { nextAction: "run-stage", topic: null, hint: `Run ${current.id} (stage ${current.stage}) next.` };
 }
 
 // --- schema migration (prepared for the future; v1 is current) ---
@@ -245,7 +309,7 @@ function cmdDetect(repoRoot: string): void {
   if (!state) {
     console.log(
       JSON.stringify(
-        { inspected: false, resume: { nextAction: "run-stage", topic: null, hint: "No prior inspection. Run project-analysis to begin." } },
+        { inspected: false, resume: { nextAction: "run-stage", topic: null, hint: firstStageHint("No prior inspection. ") } },
         null,
         2
       )
@@ -297,50 +361,35 @@ function cmdSync(repoRoot: string, gitRemote: string | null, gitHead: string | n
   if (gitRemote) state.repository.gitRemote = gitRemote;
   if (gitHead) state.repository.gitHead = gitHead;
 
-  // reconcile stages from on-disk artifacts (repo-relative existence checks)
-  const has = (rel: string) => existsSync(join(repoRoot, rel));
-  const stageComplete: Record<string, boolean> = {
-    "project-analysis": has("CLAUDE.md") && has("AUDIT.md"),
-    "project-docs":
-      has("docs/project/overview.md") &&
-      has("docs/project/components.md") &&
-      has("docs/project/patterns.md") &&
-      has("docs/project/integrations.md"),
-  };
-  for (const stage of NON_TOPIC_STAGES) {
-    const prev = state.stages[stage];
-    const complete = stageComplete[stage];
-    state.stages[stage] = {
-      status: complete ? "complete" : prev?.status ?? "pending",
-      completedAt: complete ? prev?.completedAt ?? nowIso() : prev?.completedAt ?? null,
-    };
-  }
-
+  // Reconcile the topic snapshot from AUDIT.md (the human source of truth).
   state.topics = reconcileTopics(state.topics, repoRoot);
   state.counts = countTopics(state.topics);
 
-  // audit-breakdown (stage 3) status derives from topic progress
-  const stage3InProgress = state.counts.total > 0 && (state.counts.pendingBreakdown > 0 || state.counts.draft > 0);
-  const stage3Done = state.counts.total > 0 && state.counts.pendingBreakdown === 0 && state.counts.draft === 0;
-  state.stages["audit-breakdown"] = {
-    status: stage3Done ? "complete" : stage3InProgress ? "in-progress" : state.stages["audit-breakdown"]?.status ?? "pending",
-    completedAt: stage3Done ? state.stages["audit-breakdown"]?.completedAt ?? nowIso() : state.stages["audit-breakdown"]?.completedAt ?? null,
-  };
+  // Reconcile every stage's completion entirely from the registry declaration.
+  const stages = loadInspectionStages();
+  for (const st of stages) {
+    const prev = state.stages[st.id];
+    const complete = isStageComplete(st, repoRoot, state.counts);
+    const status = complete
+      ? "complete"
+      : isStageInProgress(st, repoRoot, state.counts)
+      ? "in-progress"
+      : prev?.status ?? "pending";
+    state.stages[st.id] = { status, completedAt: complete ? prev?.completedAt ?? nowIso() : null };
+  }
 
-  state.inspection.completedStages = Object.entries(state.stages)
-    .filter(([, v]) => v.status === "complete")
-    .map(([k]) => k);
+  // Completed stages, current stage, and "topic loop done" all derive from registry order.
+  state.inspection.completedStages = stages
+    .filter((st) => state.stages[st.id]?.status === "complete")
+    .map((st) => st.id);
+  const firstIncomplete = stages.find((st) => state.stages[st.id]?.status !== "complete");
+  state.inspection.currentStage = firstIncomplete ? firstIncomplete.id : null;
+  const topicStages = stages.filter((st) => st.completion === "topics");
+  state.inspection.stage3Complete =
+    topicStages.length > 0 && topicStages.every((st) => state.stages[st.id]?.status === "complete");
   state.inspection.started = state.inspection.completedStages.length > 0 || state.counts.total > 0;
-  state.inspection.stage3Complete = stage3Done;
-  state.inspection.currentStage = stage3Done
-    ? null
-    : !stageComplete["project-analysis"]
-    ? "project-analysis"
-    : !stageComplete["project-docs"]
-    ? "project-docs"
-    : "audit-breakdown";
 
-  state.resume = computeResume(state);
+  state.resume = computeResume(state, stages);
   writeState(repoRoot, state);
   console.log(`Synced ${join(".ono", "state.json")}: ${JSON.stringify(state.counts)}, next=${state.resume.nextAction}.`);
   process.exit(0);
