@@ -177,14 +177,14 @@ The generated artifacts, all in the **target** repository:
 **Source code is never modified** by any component.
 
 ### Marketplace
-**Repo:** `ono-claude-marketplace` (`.claude-plugin/marketplace.json`).
+**Repo:** `ono-plugin-marketplace` (`.claude-plugin/marketplace.json`).
 
 The marketplace is the **distribution surface**. It lists plugins and points each at its source. The reference plugin is referenced with an explicit **HTTPS `url` source**, so installation works for any developer without SSH keys configured:
 
 ```json
 {
   "name": "ono-project-inspector",
-  "source": { "source": "url", "url": "https://github.com/appsadmin-design/Ono-ProjectInspectorPlugin.git", "ref": "main" }
+  "source": { "source": "url", "url": "https://github.com/appsadmin-design/ono-plugin-project-inspector.git", "ref": "main" }
 }
 ```
 
@@ -301,7 +301,7 @@ Two cross-cutting invariants underpin all ten: **read-only toward source code**,
 
 ```mermaid
 flowchart LR
-    M["Marketplace<br/>ono-claude-marketplace"] --> I["Install<br/>plugin@marketplace (HTTPS)"]
+    M["Marketplace<br/>ono-plugin-marketplace"] --> I["Install<br/>plugin@marketplace (HTTPS)"]
     I --> R["Registration<br/>commands, agent, skills load"]
     R --> S["Agent startup<br/>read registry + before-inspect"]
     S --> DS["inspection-state: detect<br/>prior run? version? resume?"]
@@ -347,7 +347,7 @@ flowchart TD
     Plat --> QAP["QA Plugin (planned)"]
     Plat --> SecP["Security Plugin (planned)"]
     Plat --> ProdP["Product Plugin (planned)"]
-    Mkt["ono-claude-marketplace"] --- PI
+    Mkt["ono-plugin-marketplace"] --- PI
     Mkt --- DevP
     Mkt --- QAP
     Mkt --- SecP
@@ -403,6 +403,6 @@ This document describes the architecture **as implemented today** in the Project
 | Deterministic scripts | `scripts/{slugify,update-audit-index,inspection-state}.ts` |
 | Knowledge artifacts | target repo: `CLAUDE.md`, `AUDIT.md`, `docs/project/`, `audits/` |
 | State | target repo: `.ono/state.json` |
-| Distribution | `ono-claude-marketplace/.claude-plugin/marketplace.json` |
+| Distribution | `ono-plugin-marketplace/.claude-plugin/marketplace.json` |
 
 Anything labeled **(planned)** is not yet built. No component is described that does not exist in this repository unless explicitly marked planned. As the platform matures and this document moves to `ono-plugin-platform`, the plugin-specific references above should be generalized into the shared platform contract while keeping Project Inspector as the reference implementation.

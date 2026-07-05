@@ -14,7 +14,7 @@ The **Ono Project Inspector** is the first thing built on that platform, but the
 
 ### 1. Plugin Marketplace
 
-Plugins are distributed through a dedicated marketplace repository (`ono-claude-marketplace`) rather than shared ad-hoc. Centralized distribution means a developer adds the marketplace once and can then discover and install any Ono plugin from a single place, with versioning handled consistently. Installs use an HTTPS source, so they work on any machine without requiring SSH keys or special setup. As more plugins are added, they all appear in the same catalog with no new onboarding steps.
+Plugins are distributed through a dedicated marketplace repository (`ono-plugin-marketplace`) rather than shared ad-hoc. Centralized distribution means a developer adds the marketplace once and can then discover and install any Ono plugin from a single place, with versioning handled consistently. Installs use an HTTPS source, so they work on any machine without requiring SSH keys or special setup. As more plugins are added, they all appear in the same catalog with no new onboarding steps.
 
 ---
 
