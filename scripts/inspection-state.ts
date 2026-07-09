@@ -34,8 +34,8 @@
  *   2 - state file present but invalid/corrupt JSON
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from "fs";
+import { join, sep } from "path";
 import { slugify } from "./slugify";
 
 /** Bump when the shape of state.json changes; add a migration in migrateState(). */
@@ -441,6 +441,19 @@ function main(): void {
   }
   if (!existsSync(repoRoot)) {
     console.error(`Repository root not found: ${repoRoot}`);
+    process.exit(1);
+  }
+  // Guard (worktree safety): never own/compute state inside a Claude agent
+  // worktree — that path is an ephemeral execution copy, not the developer's
+  // repository. Callers must pass the resolved main-tree root
+  // (scripts/resolve-repo-root.ts). `detect` is read-only, but even reading
+  // from a worktree would mislead the resume pointer, so guard all commands.
+  const WORKTREE_MARKER = `${sep}.claude${sep}worktrees${sep}`;
+  if (realpathSync(repoRoot).includes(WORKTREE_MARKER)) {
+    console.error(
+      `Refusing to operate on a Claude agent worktree: ${repoRoot}\n` +
+        `Pass the resolved main repository root (scripts/resolve-repo-root.ts).`
+    );
     process.exit(1);
   }
   switch (command) {

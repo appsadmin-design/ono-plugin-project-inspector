@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 — 2026-07-09
+
+Fixed an architectural issue where, when Claude Code ran the workflow inside an agent git worktree (`.claude/worktrees/agent-<id>/`), artifacts were written into that ephemeral copy and the workflow still reported success — because writes, state, and completion checks all resolved to the same wrong root. The plugin now resolves and verifies the real target repository root (Options 1 + 3).
+
+- Added `scripts/resolve-repo-root.ts`: resolves a single authoritative `TARGET_ROOT` and unwraps Claude agent worktrees to the main working tree via `git worktree list --porcelain` (unwraps only `.claude/worktrees/` paths; a deliberately-targeted worktree is honored). Exits non-zero if a worktree can't be safely unwrapped.
+- Added `scripts/verify-artifacts.ts`: independently confirms a stage's artifacts exist at `TARGET_ROOT` (never trusting a skill's textual report), fails if the root is itself a worktree, and detects artifacts that leaked into `.claude/worktrees/`.
+- `scripts/inspection-state.ts` now refuses to operate on any `.claude/worktrees/` path.
+- `hooks/before-inspect.md` resolves `TARGET_ROOT` first and stops if it can't; the agent threads `TARGET_ROOT` (absolute) into every skill and `inspection-state` call and reports a stage complete only after `verify-artifacts` passes at `TARGET_ROOT`.
+- All `after-*` hooks now verify produced artifacts at the real root instead of trusting the skill's report.
+- Every artifact-writing skill's hard constraints now require writing under the absolute `TARGET_ROOT` and forbid `.claude/worktrees/` paths.
+- Documented the resolution + verification layer in `docs/architecture.md`.
+- No changes to any target repository's source code. No registry, command, or workflow-shape changes.
+
 ## 0.7.0 — 2026-07-04
 
 Made `/inspect` state-aware ("smart startup"). It no longer blindly starts from stage 1.

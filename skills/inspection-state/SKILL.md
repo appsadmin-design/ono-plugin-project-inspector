@@ -98,4 +98,4 @@ The agent calls this skill automatically — the developer never asks for it:
 - Never store absolute filesystem paths or any machine-specific location in the file.
 - Never mark a topic `Approved` or change topic status — that is `audit-approve`'s job; this skill only reflects the current `AUDIT.md`.
 - Always go through `scripts/inspection-state.ts`; never hand-edit `state.json`.
-- Never assume the current working directory is the target repository — the repo root is always passed explicitly.
+- Never assume the current working directory is the target repository — the repo root is always passed explicitly (the orchestrator's resolved `TARGET_ROOT`, with any Claude agent worktree already unwrapped). The helper refuses to operate on any path containing `.claude/worktrees/` and exits non-zero; never pass a raw CWD.

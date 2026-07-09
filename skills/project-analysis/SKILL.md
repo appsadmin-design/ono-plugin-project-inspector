@@ -25,9 +25,11 @@ This skill is a reading and mapping skill. It is not a full audit, implementatio
 This skill generates only:
 
 ```text
-<repository-root>/CLAUDE.md
-<repository-root>/AUDIT.md
+<TARGET_ROOT>/CLAUDE.md
+<TARGET_ROOT>/AUDIT.md
 ```
+
+`<TARGET_ROOT>` is the absolute repository root the orchestrator passes in (resolved via `scripts/resolve-repo-root.ts`, with any Claude agent worktree already unwrapped to the main working tree). Always write to that absolute path. Never resolve the root yourself from the current working directory or `git rev-parse --show-toplevel`, and never write to any path containing `.claude/worktrees/`.
 
 This skill must not create:
 
@@ -448,7 +450,7 @@ Next: Review CLAUDE.md and AUDIT.md. Then run audit-breakdown on one topic from 
 - Never read or reproduce actual secret values from `.env` files; variable names only.
 - Never reproduce credentials, tokens, private keys, or secrets from any file.
 - Never proceed without explicit developer confirmation after the summary.
-- Never assume the current working directory is the target repository.
+- Never assume the current working directory is the target repository. Write every artifact under the absolute `<TARGET_ROOT>` passed by the orchestrator; never resolve the root from CWD or `git rev-parse --show-toplevel`, and never write to any path containing `.claude/worktrees/`. If the provided root contains that segment, stop and report instead of writing.
 - Never produce long detailed issue lists in `AUDIT.md`.
 - Never link to audit files that do not exist yet.
 - Do not depend on external template files; the required templates are embedded in this `SKILL.md`.

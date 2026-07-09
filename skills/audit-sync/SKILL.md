@@ -162,3 +162,4 @@ Every future Claude Code session in this repo now sees these findings via CLAUDE
 - Never copy full finding bodies into `CLAUDE.md` — one line per finding plus a link.
 - Never reproduce secret values, even if an audit file quotes variable names.
 - If an `Approved` topic's audit file is missing or unreadable, skip it in the blocks and report the broken reference — do not guess its findings and do not change its status.
+- Never assume the current working directory is the target repository. Operate only under the absolute `<TARGET_ROOT>` passed by the orchestrator; never resolve the root from CWD or `git rev-parse --show-toplevel`, and never write to any path containing `.claude/worktrees/`. If the provided root contains that segment, stop and report instead of writing.

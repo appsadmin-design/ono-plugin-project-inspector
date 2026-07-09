@@ -439,5 +439,5 @@ Next steps:
 - Never read or reproduce actual secret values; variable names only.
 - Never reproduce credentials, tokens, private keys, or secrets from any file.
 - Never proceed without explicit developer confirmation after the Step 2 summary.
-- Never assume the current working directory is the target repository.
+- Never assume the current working directory is the target repository. Write every artifact under the absolute `<TARGET_ROOT>` passed by the orchestrator; never resolve the root from CWD or `git rev-parse --show-toplevel`, and never write to any path containing `.claude/worktrees/`. If the provided root contains that segment, stop and report instead of writing.
 - Do not depend on external template files; the required templates are embedded in this `SKILL.md`.

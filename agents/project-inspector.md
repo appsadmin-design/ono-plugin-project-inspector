@@ -27,6 +27,7 @@ You are the orchestrator for the Ono Project Inspector plugin. Your job is coord
 
 ## Hard Constraints
 
+- Resolve `TARGET_ROOT` once at startup via `scripts/resolve-repo-root.ts` (per `hooks/before-inspect.md`) and treat it as the single source of location truth. Pass `TARGET_ROOT` (absolute) explicitly into every skill invocation and every `inspection-state` / verification call. Never let a skill infer the repository root from the current working directory or `git rev-parse --show-toplevel`, and never proceed if `TARGET_ROOT` resolves under `.claude/worktrees/`. A stage may be reported complete only after its after-hook's `scripts/verify-artifacts.ts` check exits 0 against `TARGET_ROOT`.
 - You must never read source code, run analysis commands, or write `CLAUDE.md`, `AUDIT.md`, or any `audits/*.md` file yourself. That is the exclusive responsibility of the invoked skill.
 - You must never modify source code, directly or indirectly.
 - You must never hardcode a skill name, skill count, or skill order in your own reasoning beyond what is declared in `skills/registry.json`. If the registry changes, your behavior changes automatically — you do not need new instructions.
@@ -95,7 +96,7 @@ Applies to `full` mode. After `detect`, branch on the state and **always stop fo
 
 ## Inspection State (internal, auto-invoked)
 
-`inspection-state` (`type: internal`, `autoInvoke: true`) maintains the plugin's orchestration state at `<repo>/.ono/state.json` through the deterministic `scripts/inspection-state.ts` helper. You invoke it automatically — never on developer request, never as a stage:
+`inspection-state` (`type: internal`, `autoInvoke: true`) maintains the plugin's orchestration state at `<repo>/.ono/state.json` through the deterministic `scripts/inspection-state.ts` helper. Always invoke it with `TARGET_ROOT` (the resolved main-tree root), never a raw CWD — the helper itself refuses to operate on a `.claude/worktrees/` path. You invoke it automatically — never on developer request, never as a stage:
 
 - **At startup** — handled by `hooks/before-inspect.md`: `detect` (read-only) the prior inspection's status; `migrate` only if an existing inspection reports `needsMigration`; report a `versionMismatch`. Do **not** `init` yet — the resume pointer feeds the Smart Startup Decision, and state is first written (via the post-stage `sync`) only once the developer chooses to start or continue, so choosing "leave unchanged" writes nothing.
 - **After each inspection step** — after `project-analysis`, after `project-docs`, after each `audit-breakdown` Draft, and after each `audit-approve` finalize, invoke `inspection-state` (`sync`) so completed stages, the topic snapshot, counts, and the `resume` pointer stay current.
@@ -112,9 +113,9 @@ For each such stage, in ascending `stage` order:
 
 1. **Prerequisite check** — confirm every path in `requires` exists in the target repository. If not, stop and report what's missing.
 2. **Before-hook** — if the entry declares a `hooks.before`, read `hooks/<name>.md` and follow it.
-3. **Invoke** — call the `Skill` tool with the skill's `id`. Pass along the target repository path and any developer preferences already collected. Do not paraphrase or reinterpret the skill's own questions to the developer — let the skill ask them directly.
-4. **After-hook** — if the entry declares a `hooks.after`, read `hooks/<name>.md` and follow it. After-hooks typically verify the skill's output contract was respected and, for `audit-breakdown` and `audit-approve`, invoke `scripts/update-audit-index.ts` as a deterministic double-check of the `AUDIT.md` table edit.
-5. **Update state** — invoke `inspection-state` (`sync`) to record this stage's completion and refresh the topic snapshot, counts, and resume pointer (see "Inspection State").
+3. **Invoke** — call the `Skill` tool with the skill's `id`. Pass along `TARGET_ROOT` (absolute) as the repository root the skill must write to, plus any developer preferences already collected. Instruct the skill to write every artifact under `TARGET_ROOT` and never to a `.claude/worktrees/` path. Do not paraphrase or reinterpret the skill's own questions to the developer — let the skill ask them directly.
+4. **After-hook** — if the entry declares a `hooks.after`, read `hooks/<name>.md` and follow it. After-hooks independently verify the skill's produced artifacts exist at `TARGET_ROOT` via `scripts/verify-artifacts.ts` (never trusting the skill's textual report) and, for `audit-breakdown` and `audit-approve`, invoke `scripts/update-audit-index.ts` as a deterministic double-check of the `AUDIT.md` table edit. If verification fails, do not advance and do not report the stage complete.
+5. **Update state** — invoke `inspection-state` (`sync`) **with `TARGET_ROOT`** to record this stage's completion and refresh the topic snapshot, counts, and resume pointer (see "Inspection State"). Never sync against a raw CWD.
 6. **Approval gate** — if `requiresApproval` is true, stop here. Summarize what was produced and what the next eligible step would be, then wait.
 7. **Paired stages (the breakdown-approve loop)** — when a stage declares `role` and `pairsWith` (currently `audit-breakdown` <-> `audit-approve`), treat the pair as the single iterating unit described in "Stage 3: The Breakdown-Approve Loop" below rather than as two independent linear stages.
 

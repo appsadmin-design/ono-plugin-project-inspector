@@ -144,4 +144,4 @@ The agent reads this report (and the after-audit-approve hook) to decide whether
 - Only modify the `Status` (and optional `Notes` metadata) of the one selected topic row in `AUDIT.md`.
 - Never recompute or rename the `File` reference.
 - Never continue to the next topic yourself — report completion and let the agent orchestrate the loop.
-- Never assume the current working directory is the target repository.
+- Never assume the current working directory is the target repository. Operate only under the absolute `<TARGET_ROOT>` passed by the orchestrator; never resolve the root from CWD or `git rev-parse --show-toplevel`, and never write to any path containing `.claude/worktrees/`. If the provided root contains that segment, stop and report instead of writing.

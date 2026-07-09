@@ -387,5 +387,5 @@ Continuation is orchestrated by the Project Inspector agent, not by this skill: 
 - Never read or reproduce actual secret values from `.env` files; variable names only.
 - Never reproduce credentials, tokens, private keys, or secrets from any file.
 - Never proceed without explicit developer confirmation after the Step 2 summary.
-- Never assume the current working directory is the target repository.
+- Never assume the current working directory is the target repository. Write every artifact under the absolute `<TARGET_ROOT>` passed by the orchestrator; never resolve the root from CWD or `git rev-parse --show-toplevel`, and never write to any path containing `.claude/worktrees/`. If the provided root contains that segment, stop and report instead of writing.
 - Never mark a Draft as Approved. Only the developer can approve.
