@@ -184,7 +184,7 @@ The marketplace is the **distribution surface**. It lists plugins and points eac
 ```json
 {
   "name": "ono-project-inspector",
-  "source": { "source": "url", "url": "https://github.com/appsadmin-design/ono-plugin-project-inspector.git", "ref": "main" }
+  "source": { "source": "url", "url": "https://github.com/OnOAppsDev/ono-plugin-project-inspector.git", "ref": "main" }
 }
 ```
 
